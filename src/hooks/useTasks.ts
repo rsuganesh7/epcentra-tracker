@@ -46,10 +46,16 @@ export const useTasks = (filters?: { phase?: string; status?: string; assignedTo
     const unsubscribe = onSnapshot(
       q, 
       (snapshot) => {
-        const tasksData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...convertTimestamp(doc.data())
-        })) as Task[];
+        const tasksData = snapshot.docs.map(doc => {
+          const data = convertTimestamp(doc.data());
+          const subtasks = Array.isArray(data.subtasks) ? data.subtasks : [];
+
+          return {
+            id: doc.id,
+            ...data,
+            subtasks
+          } as Task;
+        });
         setTasks(tasksData);
         setLoading(false);
         setError(null);
@@ -82,9 +88,13 @@ export const useTask = (taskId: string) => {
       doc(db, 'tasks', taskId), 
       (doc) => {
         if (doc.exists()) {
+          const data = convertTimestamp(doc.data());
+          const subtasks = Array.isArray(data.subtasks) ? data.subtasks : [];
+
           setTask({
             id: doc.id,
-            ...convertTimestamp(doc.data())
+            ...data,
+            subtasks
           } as Task);
         }
         setLoading(false);

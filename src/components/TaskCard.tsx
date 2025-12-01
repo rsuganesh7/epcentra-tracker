@@ -9,6 +9,10 @@ interface TaskCardProps {
 }
 
 const TaskCard: React.FC<TaskCardProps> = ({ task, onClick }) => {
+  const subtaskTotal = task.subtasks?.length || 0;
+  const completedSubtasks = task.subtasks?.filter(st => st.status === 'completed').length || 0;
+  const subtaskProgress = subtaskTotal ? Math.round((completedSubtasks / subtaskTotal) * 100) : 0;
+
   const getPriorityColor = (priority: Task['priority']) => {
     switch (priority) {
       case 'urgent': return 'text-red-600 bg-red-50';
@@ -45,6 +49,22 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onClick }) => {
               +{task.tags.length - 2}
             </span>
           )}
+        </div>
+      )}
+
+      {/* Subtasks */}
+      {subtaskTotal > 0 && (
+        <div className="mb-3">
+          <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+            <span>Subtasks</span>
+            <span>{completedSubtasks}/{subtaskTotal} done</span>
+          </div>
+          <div className="bg-gray-200 rounded-full h-1.5">
+            <div
+              className="bg-epcentra-teal h-1.5 rounded-full"
+              style={{ width: `${subtaskProgress}%` }}
+            />
+          </div>
         </div>
       )}
 

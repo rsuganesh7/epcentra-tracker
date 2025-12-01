@@ -1,0 +1,198 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserId() {
+      return request.auth.uid;
+    }
+    
+    // Get organization member data
+    function getOrgMember(orgId) {
+      return get(/databases/$(database)/documents/organizationMembers/$(getUserId() + '_' + orgId)).data;
+    }
+    
+    function isMemberOf(orgId) {
+      return exists(/databases/$(database)/documents/organizationMembers/$(getUserId() + '_' + orgId));
+    }
+    
+    function isOwnerOrAdmin(orgId) {
+      let member = getOrgMember(orgId);
+      return member.role in ['owner', 'admin'] && member.status == 'active';
+    }
+    
+    function isManager(orgId) {
+      let member = getOrgMember(orgId);
+      return member.role in ['owner', 'admin', 'manager'] && member.status == 'active';
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && getUserId() == userId;
+      allow update: if isAuthenticated() && getUserId() == userId;
+      allow delete: if false; // Users cannot be deleted
+    }
+    
+    // User preferences
+    match /userPreferences/{userId} {
+      allow read, write: if isAuthenticated() && getUserId() == userId;
+    }
+    
+    // Organizations
+    match /organizations/{orgId} {
+      allow read: if isAuthenticated() && isMemberOf(orgId);
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && isOwnerOrAdmin(orgId);
+      allow delete: if isAuthenticated() && 
+        get(/databases/$(database)/documents/organizations/$(orgId)).data.createdBy == getUserId() &&
+        getOrgMember(orgId).role == 'owner';
+    }
+    
+    // Organization Members
+    match /organizationMembers/{memberId} {
+      allow read: if isAuthenticated() && 
+        isMemberOf(resource.data.organizationId);
+      allow create: if isAuthenticated() && 
+        isOwnerOrAdmin(request.resource.data.organizationId);
+      allow update: if isAuthenticated() && (
+        getUserId() == resource.data.userId || // User can update their own membership
+        isOwnerOrAdmin(resource.data.organizationId)
+      );
+      allow delete: if isAuthenticated() && 
+        isOwnerOrAdmin(resource.data.organizationId);
+    }
+    
+    // Teams
+    match /teams/{teamId} {
+      allow read: if isAuthenticated() && 
+        isMemberOf(resource.data.organizationId);
+      allow create: if isAuthenticated() && 
+        isManager(request.resource.data.organizationId);
+      allow update, delete: if isAuthenticated() && 
+        isManager(resource.data.organizationId);
+    }
+    
+    // Projects
+    match /projects/{projectId} {
+      allow read: if isAuthenticated() && 
+        isMemberOf(resource.data.organizationId) && (
+          resource.data.visibility in ['organization', 'public'] ||
+          (resource.data.visibility == 'team' && 
+           getOrgMember(resource.data.organizationId).teams.hasAny(resource.data.teams)) ||
+          (resource.data.visibility == 'private' && 
+           (getUserId() in resource.data.members || getUserId() == resource.data.lead))
+        );
+      allow create: if isAuthenticated() && 
+        isManager(request.resource.data.organizationId);
+      allow update: if isAuthenticated() && 
+        isMemberOf(resource.data.organizationId) && (
+          isOwnerOrAdmin(resource.data.organizationId) ||
+          getUserId() == resource.data.lead ||
+          getUserId() in resource.data.members
+        );
+      allow delete: if isAuthenticated() && 
+        isOwnerOrAdmin(resource.data.organizationId);
+    }
+    
+    // Workflows
+    match /workflows/{workflowId} {
+      allow read: if isAuthenticated() && 
+        isMemberOf(resource.data.organizationId);
+      allow create, update, delete: if isAuthenticated() && 
+        isOwnerOrAdmin(request.resource.data.organizationId);
+    }
+    
+    // Priorities
+    match /priorities/{priorityId} {
+      allow read: if isAuthenticated() && 
+        isMemberOf(resource.data.organizationId);
+      allow create, update, delete: if isAuthenticated() && 
+        isOwnerOrAdmin(request.resource.data.organizationId);
+    }
+    
+    // Labels
+    match /labels/{labelId} {
+      allow read: if isAuthenticated() && 
+        isMemberOf(resource.data.organizationId);
+      allow create, update, delete: if isAuthenticated() && 
+        isMemberOf(request.resource.data.organizationId);
+    }
+    
+    // Tasks
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated() && 
+        isMemberOf(resource.data.organizationId) &&
+        exists(/databases/$(database)/documents/projects/$(resource.data.projectId));
+      allow create: if isAuthenticated() && 
+        isMemberOf(request.resource.data.organizationId) &&
+        exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId));
+      allow update: if isAuthenticated() && 
+        isMemberOf(resource.data.organizationId) && (
+          getUserId() in resource.data.assignees ||
+          getUserId() == resource.data.reporter ||
+          isManager(resource.data.organizationId)
+        );
+      allow delete: if isAuthenticated() && (
+        getUserId() == resource.data.createdBy ||
+        isOwnerOrAdmin(resource.data.organizationId)
+      );
+    }
+    
+    // Comments
+    match /comments/{commentId} {
+      allow read: if isAuthenticated() &&
+        exists(/databases/$(database)/documents/tasks/$(resource.data.taskId));
+      allow create: if isAuthenticated() && 
+        getUserId() == request.resource.data.userId;
+      allow update, delete: if isAuthenticated() && 
+        getUserId() == resource.data.userId;
+    }
+    
+    // Time Entries
+    match /timeEntries/{entryId} {
+      allow read: if isAuthenticated() &&
+        exists(/databases/$(database)/documents/tasks/$(resource.data.taskId));
+      allow create: if isAuthenticated() && 
+        getUserId() == request.resource.data.userId;
+      allow update, delete: if isAuthenticated() && 
+        getUserId() == resource.data.userId;
+    }
+    
+    // Activities
+    match /activities/{activityId} {
+      allow read: if isAuthenticated() && 
+        isMemberOf(resource.data.organizationId);
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Activities are immutable
+    }
+    
+    // Milestones
+    match /milestones/{milestoneId} {
+      allow read: if isAuthenticated() && 
+        isMemberOf(resource.data.organizationId);
+      allow create, update, delete: if isAuthenticated() && 
+        isManager(request.resource.data.organizationId);
+    }
+    
+    // Sprints
+    match /sprints/{sprintId} {
+      allow read: if isAuthenticated() && 
+        isMemberOf(resource.data.organizationId);
+      allow create, update, delete: if isAuthenticated() && 
+        isManager(request.resource.data.organizationId);
+    }
+    
+    // Epics
+    match /epics/{epicId} {
+      allow read: if isAuthenticated() && 
+        isMemberOf(resource.data.organizationId);
+      allow create, update, delete: if isAuthenticated() && 
+        isManager(request.resource.data.organizationId);
+    }
+  }
+}

@@ -31,10 +31,10 @@ const Dashboard: React.FC = () => {
 
   const stats = useMemo(() => {
     const total = tasks.length;
-    const completed = tasks.filter(t => t.status === 'completed').length;
-    const inProgress = tasks.filter(t => t.status === 'in-progress').length;
-    const blocked = tasks.filter(t => t.status === 'blocked').length;
-    const pending = tasks.filter(t => t.status === 'pending').length;
+    const completed = tasks.filter(t => t.statusId === 'completed').length;
+    const inProgress = tasks.filter(t => t.statusId === 'in-progress').length;
+    const blocked = tasks.filter(t => t.statusId === 'blocked').length;
+    const pending = tasks.filter(t => t.statusId === 'pending').length;
 
     const totalHours = tasks.reduce((sum, t) => sum + (t.actualHours || 0), 0);
     const estimatedHours = tasks.reduce((sum, t) => sum + t.estimatedHours, 0);
@@ -52,7 +52,7 @@ const Dashboard: React.FC = () => {
 
     const phaseProgress = phases.map(phase => {
       const phaseTasks = tasks.filter(t => t.phase === phase);
-      const phaseCompleted = phaseTasks.filter(t => t.status === 'completed').length;
+      const phaseCompleted = phaseTasks.filter(t => t.statusId === 'completed').length;
       return {
         phase: phase.replace('Phase ', 'P'),
         progress: phaseTasks.length > 0 ? Math.round((phaseCompleted / phaseTasks.length) * 100) : 0,

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Task, Phase, TaskStatus, TaskPriority } from '../types';
+import { Task, Phase, TaskStatus, TaskPriority, Subtask } from '../types';
 import { X } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -25,7 +25,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose, onSave }) => {
     dependencies: task?.dependencies || [],
     tags: task?.tags?.join(', ') || '',
     progress: task?.progress || 0,
-    blockedReason: task?.blockedReason || ''
+    blockedReason: task?.blockedReason || '',
+    subtasks: task?.subtasks || [] as Subtask[]
   });
 
   const phases: Phase[] = [
@@ -38,8 +39,41 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose, onSave }) => {
     'Phase 7: Advanced Features'
   ];
 
+  const createSubtask = (): Subtask => ({
+    id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `subtask-${Date.now()}-${Math.random()}`,
+    title: '',
+    status: 'pending'
+  });
+
+  const handleAddSubtask = () => {
+    setFormData({
+      ...formData,
+      subtasks: [...formData.subtasks, createSubtask()]
+    });
+  };
+
+  const handleUpdateSubtask = (id: string, updates: Partial<Subtask>) => {
+    setFormData({
+      ...formData,
+      subtasks: formData.subtasks.map(subtask =>
+        subtask.id === id ? { ...subtask, ...updates } : subtask
+      )
+    });
+  };
+
+  const handleRemoveSubtask = (id: string) => {
+    setFormData({
+      ...formData,
+      subtasks: formData.subtasks.filter(subtask => subtask.id !== id)
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanedSubtasks = formData.subtasks.filter(st => st.title.trim() !== '');
+    const subtaskProgress = cleanedSubtasks.length
+      ? Math.round((cleanedSubtasks.filter(st => st.status === 'completed').length / cleanedSubtasks.length) * 100)
+      : formData.progress;
     
     onSave({
       title: formData.title,
@@ -55,7 +89,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose, onSave }) => {
       assignedTo: formData.assignedTo,
       dependencies: formData.dependencies,
       tags: formData.tags.split(',').map(t => t.trim()).filter(t => t),
-      progress: formData.progress,
+      progress: subtaskProgress,
+      subtasks: cleanedSubtasks,
       blockedReason: formData.blockedReason || undefined,
       createdBy: task?.createdBy || '',
       completedAt: formData.status === 'completed' ? new Date() : undefined
@@ -262,6 +297,58 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose, onSave }) => {
               className="input"
               placeholder="backend, api, database"
             />
+          </div>
+
+          {/* Subtasks */}
+          <div className="border rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Subtasks</p>
+                <p className="text-xs text-gray-500">Split this task into smaller steps</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleAddSubtask}
+                className="px-3 py-1 bg-epcentra-lightTeal text-white rounded hover:bg-epcentra-teal transition-colors"
+              >
+                Add subtask
+              </button>
+            </div>
+
+            {formData.subtasks.length === 0 && (
+              <p className="text-sm text-gray-500">No subtasks added yet.</p>
+            )}
+
+            <div className="space-y-3">
+              {formData.subtasks.map((subtask) => (
+                <div key={subtask.id} className="grid grid-cols-12 gap-2 items-center">
+                  <input
+                    type="text"
+                    placeholder="Subtask title"
+                    value={subtask.title}
+                    onChange={(e) => handleUpdateSubtask(subtask.id, { title: e.target.value })}
+                    className="input col-span-7"
+                  />
+                  <select
+                    value={subtask.status}
+                    onChange={(e) => handleUpdateSubtask(subtask.id, { status: e.target.value as TaskStatus })}
+                    className="select col-span-3"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="blocked">Blocked</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveSubtask(subtask.id)}
+                    className="text-red-500 text-sm col-span-2 hover:text-red-600"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Blocked Reason (only if status is blocked) */}
