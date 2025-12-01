@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrganization } from '../contexts/OrganizationContext';
 import { Project, Workflow, Priority, Label } from '../types';
+import { api } from '../lib/apiClient';
 
 export function useProjects() {
   const { currentUser } = useAuth();
@@ -13,15 +14,43 @@ export function useProjects() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setError(null);
-    setProjects([]);
-    setLoading(false);
+    fetchProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentOrganization?.id, currentUser?.id]);
 
   const fetchProjects = async () => {
-    setError(null);
-    setProjects([]);
-    setLoading(false);
+    if (!currentOrganization || !currentUser) {
+      setProjects([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const { projects: data } = await api.projects.list(currentOrganization.id);
+      const mapped = data.map((p: any) => ({
+        id: p.id,
+        organizationId: p.organizationId ?? p.organization_id,
+        name: p.name,
+        key: p.key,
+        description: p.description,
+        visibility: (p.visibility || 'organization') as Project['visibility'],
+        status: (p.status || 'active') as Project['status'],
+        lead: p.lead || currentUser.id,
+        members: p.members || [],
+        teams: p.teams || [],
+        settings: p.settings || { workflow: '', allowSubtasks: true, allowTimeTracking: true, allowAttachments: true, requireEstimates: false, autoAssignCreator: true, notifyOnTaskUpdate: true },
+        createdBy: p.createdBy || p.created_by || '',
+        createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
+        updatedAt: p.updatedAt ? new Date(p.updatedAt) : new Date(),
+      }));
+      setProjects(mapped);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load projects');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return { projects, loading, error, refetch: fetchProjects };

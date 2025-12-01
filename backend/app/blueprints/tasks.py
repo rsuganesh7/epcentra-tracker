@@ -2,9 +2,11 @@ from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
+from pydantic import ValidationError
 
 from ..extensions import db
 from ..models import Task
+from ..schemas.task import TaskCreateSchema, TaskUpdateSchema
 
 tasks_bp = Blueprint("tasks", __name__)
 
@@ -40,7 +42,11 @@ def _task_to_dict(task: Task):
 @tasks_bp.get("/")
 @jwt_required()
 def list_tasks():
-    tasks = Task.query.order_by(Task.created_at.desc()).all()
+    org_id = request.args.get("organizationId")
+    query = Task.query
+    if org_id:
+        query = query.filter_by(organization_id=org_id)
+    tasks = query.order_by(Task.created_at.desc()).all()
     return jsonify({"tasks": [_task_to_dict(t) for t in tasks]}), 200
 
 
@@ -49,27 +55,32 @@ def list_tasks():
 def create_task():
     user_id = get_jwt_identity()
     payload = request.get_json(force=True) or {}
+    try:
+        data = TaskCreateSchema.model_validate(payload)
+    } except ValidationError as err:
+        return jsonify({"message": "Invalid payload", "errors": err.errors()}), 400
+
     task = Task(
-        organization_id=payload.get("organizationId"),
-        project_id=payload.get("projectId"),
-        title=payload.get("title", ""),
-        description=payload.get("description"),
-        status=payload.get("status", "pending"),
-        priority=payload.get("priority", "medium"),
-        phase=payload.get("phase"),
-        week=payload.get("week"),
-        start_date=_parse_date(payload.get("startDate")),
-        end_date=_parse_date(payload.get("endDate")),
-        estimated_hours=payload.get("estimatedHours"),
-        actual_hours=payload.get("actualHours"),
-        assigned_to=payload.get("assignedTo") or [],
-        dependencies=payload.get("dependencies") or [],
-        tags=payload.get("tags") or [],
-        progress=payload.get("progress") or 0,
-        subtasks=payload.get("subtasks") or [],
-        blocked_reason=payload.get("blockedReason"),
+        organization_id=data.organizationId,
+        project_id=data.projectId,
+        title=data.title,
+        description=data.description,
+        status=data.status or "pending",
+        priority=data.priority or "medium",
+        phase=data.phase,
+        week=data.week,
+        start_date=_parse_date(data.startDate),
+        end_date=_parse_date(data.endDate),
+        estimated_hours=data.estimatedHours,
+        actual_hours=data.actualHours,
+        assigned_to=data.assignedTo or [],
+        dependencies=data.dependencies or [],
+        tags=data.tags or [],
+        progress=data.progress or 0,
+        subtasks=[s.model_dump() for s in data.subtasks] if data.subtasks else [],
+        blocked_reason=data.blockedReason,
         created_by=user_id,
-        completed_at=_parse_datetime(payload.get("completedAt")),
+        completed_at=_parse_datetime(data.completedAt),
     )
     db.session.add(task)
     db.session.commit()
@@ -81,37 +92,45 @@ def create_task():
 def update_task(task_id: str):
     task = Task.query.get_or_404(task_id)
     payload = request.get_json(force=True) or {}
+    try:
+        data = TaskUpdateSchema.model_validate(payload)
+    except ValidationError as err:
+        return jsonify({"message": "Invalid payload", "errors": err.errors()}), 400
 
-    for field in [
-        "title",
-        "description",
-        "status",
-        "priority",
-        "phase",
-        "week",
-        "estimated_hours",
-        "actual_hours",
-        "blocked_reason",
-    ]:
-        if field in payload:
-            setattr(task, field, payload[field])
-
-    if "startDate" in payload:
-        task.start_date = _parse_date(payload.get("startDate"))
-    if "endDate" in payload:
-        task.end_date = _parse_date(payload.get("endDate"))
-    if "assignedTo" in payload:
-        task.assigned_to = payload.get("assignedTo") or []
-    if "dependencies" in payload:
-        task.dependencies = payload.get("dependencies") or []
-    if "tags" in payload:
-        task.tags = payload.get("tags") or []
-    if "progress" in payload:
-        task.progress = payload.get("progress") or 0
-    if "subtasks" in payload:
-        task.subtasks = payload.get("subtasks") or []
-    if "completedAt" in payload:
-        task.completed_at = _parse_datetime(payload.get("completedAt"))
+    if data.title is not None:
+        task.title = data.title
+    if data.description is not None:
+        task.description = data.description
+    if data.status is not None:
+        task.status = data.status
+    if data.priority is not None:
+        task.priority = data.priority
+    if data.phase is not None:
+        task.phase = data.phase
+    if data.week is not None:
+        task.week = data.week
+    if data.estimatedHours is not None:
+        task.estimated_hours = data.estimatedHours
+    if data.actualHours is not None:
+        task.actual_hours = data.actualHours
+    if data.blockedReason is not None:
+        task.blocked_reason = data.blockedReason
+    if data.startDate is not None:
+        task.start_date = _parse_date(data.startDate)
+    if data.endDate is not None:
+        task.end_date = _parse_date(data.endDate)
+    if data.assignedTo is not None:
+        task.assigned_to = data.assignedTo or []
+    if data.dependencies is not None:
+        task.dependencies = data.dependencies or []
+    if data.tags is not None:
+        task.tags = data.tags or []
+    if data.progress is not None:
+        task.progress = data.progress
+    if data.subtasks is not None:
+        task.subtasks = [s.model_dump() for s in data.subtasks] if data.subtasks else []
+    if data.completedAt is not None:
+        task.completed_at = _parse_datetime(data.completedAt)
 
     db.session.commit()
     return jsonify({"task": _task_to_dict(task)}), 200

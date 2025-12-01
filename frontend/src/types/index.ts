@@ -63,3 +63,28 @@ export interface DashboardStats {
   byAssignee: Record<string, number>;
   userWorkload: Record<string, number>;
 }
+
+export interface RoadmapPhaseSimple {
+  id: string;
+  name: string;
+  description?: string;
+  startWeek?: number;
+  endWeek?: number;
+  orderIndex?: number;
+}
+
+export interface RoadmapMilestoneSimple {
+  id: string;
+  title: string;
+  description?: string;
+  week?: number;
+  phaseId?: string;
+}
+
+export interface TeamSummary {
+  id: string;
+  name: string;
+  category?: string;
+  description?: string;
+  memberCount: number;
+}

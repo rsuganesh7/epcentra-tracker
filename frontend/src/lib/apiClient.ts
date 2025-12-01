@@ -1,4 +1,6 @@
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5001/api';
+import { environment } from '../environments';
+
+const API_BASE = environment.apiBase;
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
@@ -139,8 +141,9 @@ export const api = {
     },
   },
   tasks: {
-    list() {
-      return request<{ tasks: any[] }>('/tasks/');
+    list(query: string = '') {
+      const path = query ? `/tasks/${query.startsWith('?') ? query : `?${query}`}` : '/tasks/';
+      return request<{ tasks: any[] }>(path);
     },
     create(task: any) {
       return request<{ task: any }>('/tasks/', { method: 'POST', body: task });
@@ -150,6 +153,40 @@ export const api = {
     },
     remove(id: string) {
       return request<void>(`/tasks/${id}`, { method: 'DELETE' });
+    },
+  },
+  roadmap: {
+    listPhases(organizationId?: string) {
+      const qs = organizationId ? `?organizationId=${organizationId}` : '';
+      return request<{ phases: any[] }>(`/roadmap/phases${qs}`);
+    },
+    createPhase(payload: any) {
+      return request<{ phase: any }>('/roadmap/phases', { method: 'POST', body: payload });
+    },
+    listMilestones(organizationId?: string) {
+      const qs = organizationId ? `?organizationId=${organizationId}` : '';
+      return request<{ milestones: any[] }>(`/roadmap/milestones${qs}`);
+    },
+    createMilestone(payload: any) {
+      return request<{ milestone: any }>('/roadmap/milestones', { method: 'POST', body: payload });
+    },
+  },
+  teams: {
+    list(organizationId?: string) {
+      const qs = organizationId ? `?organizationId=${organizationId}` : '';
+      return request<{ teams: any[] }>(`/teams/${qs}`);
+    },
+    create(payload: any) {
+      return request<{ team: any }>('/teams/', { method: 'POST', body: payload });
+    },
+  },
+  projects: {
+    list(organizationId?: string) {
+      const qs = organizationId ? `?organizationId=${organizationId}` : '';
+      return request<{ projects: any[] }>(`/projects/${qs}`);
+    },
+    create(payload: any) {
+      return request<{ project: any }>('/projects/', { method: 'POST', body: payload });
     },
   },
   tokens: {

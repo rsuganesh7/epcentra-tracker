@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/apiClient';
 import { Task } from '../types';
+import { useOrganization } from '../contexts/OrganizationContext';
 
 const mapTaskFromApi = (raw: any): Task => ({
   id: raw.id,
@@ -32,12 +33,15 @@ export const useTasks = (filters?: { phase?: string; status?: string; assignedTo
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { currentOrganization } = useOrganization();
 
   const fetchTasks = async () => {
     try {
       setLoading(true);
       setError(null);
-      const { tasks } = await api.tasks.list();
+      const { tasks } = await api.tasks.list(
+        currentOrganization?.id ? `?organizationId=${currentOrganization.id}` : ''
+      );
       let mapped = tasks.map(mapTaskFromApi);
       if (filters?.phase) {
         mapped = mapped.filter(t => t.phase === filters.phase);
@@ -59,7 +63,7 @@ export const useTasks = (filters?: { phase?: string; status?: string; assignedTo
   useEffect(() => {
     fetchTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters?.phase, filters?.status, filters?.assignedTo]);
+  }, [filters?.phase, filters?.status, filters?.assignedTo, currentOrganization?.id]);
 
   return { tasks, loading, error, refetch: fetchTasks };
 };

@@ -7,6 +7,9 @@ from .extensions import db, jwt, migrate
 from .blueprints.auth import auth_bp
 from .blueprints.organizations import organizations_bp
 from .blueprints.tasks import tasks_bp
+from .blueprints.roadmap import roadmap_bp
+from .blueprints.projects import projects_bp
+from .blueprints.teams import teams_bp
 from .blueprints.health import health_bp
 
 
@@ -64,6 +67,9 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(organizations_bp, url_prefix="/api/organizations")
     app.register_blueprint(tasks_bp, url_prefix="/api/tasks")
+    app.register_blueprint(roadmap_bp, url_prefix="/api/roadmap")
+    app.register_blueprint(projects_bp, url_prefix="/api/projects")
+    app.register_blueprint(teams_bp, url_prefix="/api/teams")
     app.register_blueprint(health_bp, url_prefix="/health")
 
 

@@ -1,55 +1,148 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useTasks } from '../hooks/useTasks';
-import { Phase } from '../types';
-import { Calendar, Clock, TrendingUp } from 'lucide-react';
+import { RoadmapPhaseSimple, RoadmapMilestoneSimple } from '../types';
+import { Calendar, Clock, TrendingUp, Plus, Flag } from 'lucide-react';
+import { api } from '../lib/apiClient';
+import { useOrganization } from '../contexts/OrganizationContext';
 
 const Roadmap: React.FC = () => {
-  const { tasks, loading } = useTasks();
+  const { tasks, loading: tasksLoading } = useTasks();
+  const { currentOrganization } = useOrganization();
+  const [phases, setPhases] = useState<RoadmapPhaseSimple[]>([]);
+  const [milestones, setMilestones] = useState<RoadmapMilestoneSimple[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [newPhase, setNewPhase] = useState<{ name: string; startWeek?: number; endWeek?: number }>({ name: '' });
+  const [newMilestone, setNewMilestone] = useState<{ title: string; week?: number; phaseId?: string }>({ title: '' });
 
-  const phases: Phase[] = [
-    'Phase 1: Foundation & DMS',
-    'Phase 2: Template Engine',
-    'Phase 3: Formula Engine',
-    'Phase 4: Master Data & Projects',
-    'Phase 5: Core Modules',
-    'Phase 6: EPCC Modules',
-    'Phase 7: Advanced Features'
-  ];
+  const orgId = currentOrganization?.id;
 
-  const phaseWeeks = {
-    'Phase 1: Foundation & DMS': '1-6',
-    'Phase 2: Template Engine': '7-10',
-    'Phase 3: Formula Engine': '11-14',
-    'Phase 4: Master Data & Projects': '15-18',
-    'Phase 5: Core Modules': '19-28',
-    'Phase 6: EPCC Modules': '29-38',
-    'Phase 7: Advanced Features': '39-44'
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [{ phases: p }, { milestones: m }] = await Promise.all([
+        api.roadmap.listPhases(orgId),
+        api.roadmap.listMilestones(orgId),
+      ]);
+      setPhases(
+        p.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          description: item.description,
+          startWeek: item.startWeek ?? item.start_week,
+          endWeek: item.endWeek ?? item.end_week,
+          orderIndex: item.orderIndex ?? item.order_index,
+        }))
+      );
+      setMilestones(
+        m.map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          description: item.description,
+          week: item.week,
+          phaseId: item.phaseId ?? item.phase_id,
+        }))
+      );
+    } catch (err: any) {
+      setError(err.message || 'Failed to load roadmap');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const phaseData = useMemo(() => {
-    return phases.map(phase => {
-      const phaseTasks = tasks.filter(t => t.phase === phase);
-      const completed = phaseTasks.filter(t => t.status === 'completed').length;
-      const inProgress = phaseTasks.filter(t => t.status === 'in-progress').length;
-      const total = phaseTasks.length;
-      const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+  useEffect(() => {
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId]);
 
-      return {
-        phase,
-        weeks: phaseWeeks[phase],
-        total,
-        completed,
-        inProgress,
-        progress,
-        tasks: phaseTasks
-      };
-    });
+  const phaseData = useMemo(() => {
+    return phases
+      .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0))
+      .map((phase) => {
+        const phaseTasks = tasks.filter(t => t.phase === phase.name);
+        const completed = phaseTasks.filter(t => t.status === 'completed').length;
+        const inProgress = phaseTasks.filter(t => t.status === 'in-progress').length;
+        const total = phaseTasks.length;
+        const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+        const weeks = phase.startWeek && phase.endWeek ? `${phase.startWeek}-${phase.endWeek}` : '—';
+        const phaseMilestones = milestones.filter(m => m.phaseId === phase.id || !m.phaseId);
+
+        return {
+          phase,
+          weeks,
+          total,
+          completed,
+          inProgress,
+          progress,
+          tasks: phaseTasks,
+          milestones: phaseMilestones,
+        };
+      });
+  }, [phases, tasks, milestones]);
+
+  const overallProgress = useMemo(() => {
+    if (tasks.length === 0) return 0;
+    const done = tasks.filter(t => t.status === 'completed').length;
+    return Math.round((done / tasks.length) * 100);
   }, [tasks]);
 
-  if (loading) {
+  const handleAddPhase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPhase.name) return;
+    try {
+      await api.roadmap.createPhase({
+        ...newPhase,
+        organizationId: orgId,
+      });
+      setNewPhase({ name: '' });
+      fetchData();
+    } catch (err: any) {
+      setError(err.message || 'Failed to add phase');
+    }
+  };
+
+  const handleAddMilestone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMilestone.title) return;
+    try {
+      await api.roadmap.createMilestone({
+        ...newMilestone,
+        organizationId: orgId,
+      });
+      setNewMilestone({ title: '' });
+      fetchData();
+    } catch (err: any) {
+      setError(err.message || 'Failed to add milestone');
+    }
+  };
+
+  if (!orgId) {
+    return (
+      <div className="p-6">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <h2 className="text-yellow-800 font-semibold mb-2">Select an organization</h2>
+          <p className="text-yellow-700">Choose or create an organization to configure the roadmap.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading || tasksLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-xl text-gray-600">Loading roadmap...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <h2 className="text-red-800 font-semibold mb-2">Error</h2>
+          <p className="text-red-700">{error}</p>
+        </div>
       </div>
     );
   }
@@ -59,7 +152,84 @@ const Roadmap: React.FC = () => {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-epcentra-navy">Development Roadmap</h1>
-        <p className="text-gray-600 mt-1">44-week EPCENTRA implementation timeline</p>
+        <p className="text-gray-600 mt-1">Configure phases and milestones directly from the app.</p>
+      </div>
+
+      {/* Quick add */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form onSubmit={handleAddPhase} className="card space-y-3">
+          <div className="flex items-center space-x-2 text-epcentra-navy">
+            <Plus size={18} />
+            <span className="font-semibold">Add Phase</span>
+          </div>
+          <input
+            type="text"
+            required
+            value={newPhase.name}
+            onChange={(e) => setNewPhase({ ...newPhase, name: e.target.value })}
+            className="input"
+            placeholder="Phase name"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="number"
+              value={newPhase.startWeek || ''}
+              onChange={(e) => setNewPhase({ ...newPhase, startWeek: e.target.value ? Number(e.target.value) : undefined })}
+              className="input"
+              placeholder="Start week"
+              min={1}
+            />
+            <input
+              type="number"
+              value={newPhase.endWeek || ''}
+              onChange={(e) => setNewPhase({ ...newPhase, endWeek: e.target.value ? Number(e.target.value) : undefined })}
+              className="input"
+              placeholder="End week"
+              min={1}
+            />
+          </div>
+          <button type="submit" className="btn-primary w-full" disabled={!newPhase.name}>
+            Add Phase
+          </button>
+        </form>
+
+        <form onSubmit={handleAddMilestone} className="card space-y-3">
+          <div className="flex items-center space-x-2 text-epcentra-navy">
+            <Flag size={18} />
+            <span className="font-semibold">Add Milestone</span>
+          </div>
+          <input
+            type="text"
+            required
+            value={newMilestone.title}
+            onChange={(e) => setNewMilestone({ ...newMilestone, title: e.target.value })}
+            className="input"
+            placeholder="Milestone title"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="number"
+              value={newMilestone.week || ''}
+              onChange={(e) => setNewMilestone({ ...newMilestone, week: e.target.value ? Number(e.target.value) : undefined })}
+              className="input"
+              placeholder="Week"
+              min={1}
+            />
+            <select
+              value={newMilestone.phaseId || ''}
+              onChange={(e) => setNewMilestone({ ...newMilestone, phaseId: e.target.value || undefined })}
+              className="select"
+            >
+              <option value="">No phase</option>
+              {phases.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          <button type="submit" className="btn-secondary w-full" disabled={!newMilestone.title}>
+            Add Milestone
+          </button>
+        </form>
       </div>
 
       {/* Summary Stats */}
@@ -69,7 +239,9 @@ const Roadmap: React.FC = () => {
             <Calendar className="text-epcentra-teal" size={32} />
             <div>
               <p className="text-sm text-gray-600">Total Duration</p>
-              <p className="text-2xl font-bold text-epcentra-navy">44 Weeks</p>
+              <p className="text-2xl font-bold text-epcentra-navy">
+                {Math.max(...phases.map(p => p.endWeek || 0), 0) || '—'} Weeks
+              </p>
             </div>
           </div>
         </div>
@@ -79,28 +251,28 @@ const Roadmap: React.FC = () => {
             <TrendingUp className="text-epcentra-gold" size={32} />
             <div>
               <p className="text-sm text-gray-600">Total Phases</p>
-              <p className="text-2xl font-bold text-epcentra-navy">7 Phases</p>
+              <p className="text-2xl font-bold text-epcentra-navy">{phases.length} Phases</p>
             </div>
           </div>
         </div>
 
         <div className="card">
-          <div className="flex items-center space-x-3">
-            <Clock className="text-green-600" size={32} />
-            <div>
-              <p className="text-sm text-gray-600">Overall Progress</p>
-              <p className="text-2xl font-bold text-green-600">
-                {Math.round((tasks.filter(t => t.status === 'completed').length / tasks.length) * 100)}%
-              </p>
+            <div className="flex items-center space-x-3">
+              <Clock className="text-green-600" size={32} />
+              <div>
+                <p className="text-sm text-gray-600">Overall Progress</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {overallProgress}%
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
       {/* Timeline */}
       <div className="space-y-6">
         {phaseData.map((phase, index) => (
-          <div key={phase.phase} className="card">
+          <div key={phase.phase.id} className="card">
             {/* Phase Header */}
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
@@ -109,8 +281,11 @@ const Roadmap: React.FC = () => {
                     {index + 1}
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-epcentra-navy">{phase.phase}</h3>
+                    <h3 className="text-xl font-bold text-epcentra-navy">{phase.phase.name}</h3>
                     <p className="text-sm text-gray-600">Weeks {phase.weeks}</p>
+                    {phase.phase.description && (
+                      <p className="text-xs text-gray-500">{phase.phase.description}</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -161,7 +336,7 @@ const Roadmap: React.FC = () => {
                       >
                         <div className="flex-1">
                           <p className="font-medium text-gray-800">{task.title}</p>
-                          <p className="text-sm text-gray-600">Week {task.week}</p>
+                          {task.week && <p className="text-sm text-gray-600">Week {task.week}</p>}
                         </div>
                         <div className="flex items-center space-x-3">
                           <span className={`badge badge-${task.status}`}>
@@ -181,54 +356,26 @@ const Roadmap: React.FC = () => {
             {phase.tasks.length === 0 && (
               <p className="text-gray-400 text-center py-4 border-t">No tasks created for this phase yet</p>
             )}
+
+            {/* Milestones for this phase */}
+            {phase.milestones.length > 0 && (
+              <div className="mt-4 border-t pt-4 space-y-2">
+                <h4 className="text-sm font-semibold text-epcentra-navy flex items-center space-x-2">
+                  <Flag size={16} /> <span>Milestones</span>
+                </h4>
+                {phase.milestones.map(m => (
+                  <div key={m.id} className="flex items-center justify-between bg-blue-50 p-2 rounded">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{m.title}</p>
+                      {m.description && <p className="text-xs text-gray-600">{m.description}</p>}
+                    </div>
+                    {m.week && <span className="text-xs text-blue-700">Week {m.week}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
-      </div>
-
-      {/* Milestones */}
-      <div className="card">
-        <h3 className="text-xl font-bold text-epcentra-navy mb-4">Key Milestones</h3>
-        <div className="space-y-3">
-          <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-lg">
-            <div className="w-3 h-3 rounded-full bg-green-600" />
-            <div className="flex-1">
-              <p className="font-medium text-gray-800">Week 6: DMS Module Complete</p>
-              <p className="text-sm text-gray-600">Foundation with working document management</p>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg">
-            <div className="w-3 h-3 rounded-full bg-blue-600" />
-            <div className="flex-1">
-              <p className="font-medium text-gray-800">Week 14: Template + Formula Engines Complete</p>
-              <p className="text-sm text-gray-600">Core differentiators operational</p>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-3 p-3 bg-purple-50 rounded-lg">
-            <div className="w-3 h-3 rounded-full bg-purple-600" />
-            <div className="flex-1">
-              <p className="font-medium text-gray-800">Week 28: Core Modules Complete</p>
-              <p className="text-sm text-gray-600">Procurement, Store, Planning operational</p>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-3 p-3 bg-yellow-50 rounded-lg">
-            <div className="w-3 h-3 rounded-full bg-yellow-600" />
-            <div className="flex-1">
-              <p className="font-medium text-gray-800">Week 38: EPCC Modules Complete</p>
-              <p className="text-sm text-gray-600">All EPCC-specific features ready</p>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-3 p-3 bg-gold-50 rounded-lg">
-            <div className="w-3 h-3 rounded-full bg-epcentra-gold" />
-            <div className="flex-1">
-              <p className="font-medium text-gray-800">Week 44: Production Launch 🚀</p>
-              <p className="text-sm text-gray-600">EPCENTRA goes live!</p>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

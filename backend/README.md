@@ -50,6 +50,9 @@ python backend/scripts/db_ping.py
 - `POST /api/tasks/` – create task
 - `PUT /api/tasks/:id` – update task
 - `DELETE /api/tasks/:id` – delete task
+- `GET/POST/PUT/DELETE /api/roadmap/phases` – manage roadmap phases
+- `GET/POST/PUT/DELETE /api/roadmap/milestones` – manage milestones
+- `GET/POST/PUT/DELETE /api/teams` – manage team entries
 - `GET /health/live`, `GET /health/ready` – health checks
 
 ## Next Steps
