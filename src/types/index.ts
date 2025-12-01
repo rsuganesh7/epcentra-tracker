@@ -60,6 +60,5 @@ export interface DashboardStats {
   byStatus: Record<string, number>;
   byPriority: Record<string, number>;
   byAssignee: Record<string, number>;
-}
   userWorkload: Record<string, number>;
 }

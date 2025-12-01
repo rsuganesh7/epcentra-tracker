@@ -16,13 +16,14 @@ export function hasPermission(
   }
 ): boolean {
   // Get permissions for the user's role
-  const rolePermissions = SYSTEM_ROLES[member.role as keyof typeof SYSTEM_ROLES] || [];
+  const rolePermissions: Permission[] = SYSTEM_ROLES[member.role as keyof typeof SYSTEM_ROLES] || [];
   
-  // Combine with custom permissions
-  const allPermissions = [...rolePermissions, ...member.permissions];
+  // Note: member.permissions are string IDs, not Permission objects
+  // For now, we only use role-based permissions
+  // TODO: Implement custom permission lookup if needed
   
   // Check each permission
-  for (const permission of allPermissions) {
+  for (const permission of rolePermissions) {
     if (permission.resource !== resource) continue;
     if (!permission.actions.includes(action)) continue;
     
@@ -108,12 +109,14 @@ export function getAllowedActions(
     teamIds?: string[];
   }
 ): Action[] {
-  const rolePermissions = SYSTEM_ROLES[member.role as keyof typeof SYSTEM_ROLES] || [];
-  const allPermissions = [...rolePermissions, ...member.permissions];
+  const rolePermissions: Permission[] = SYSTEM_ROLES[member.role as keyof typeof SYSTEM_ROLES] || [];
+  
+  // Note: member.permissions are string IDs, not Permission objects
+  // For now, we only use role-based permissions
   
   const allowedActions = new Set<Action>();
   
-  for (const permission of allPermissions) {
+  for (const permission of rolePermissions) {
     if (permission.resource !== resource) continue;
     
     const hasScope = 
@@ -123,7 +126,7 @@ export function getAllowedActions(
       (permission.scope === 'own' && context?.createdBy === member.userId);
     
     if (hasScope) {
-      permission.actions.forEach(action => allowedActions.add(action));
+      permission.actions.forEach((action: Action) => allowedActions.add(action));
     }
   }
   

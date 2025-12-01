@@ -1,5 +1,5 @@
 import { collection, addDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../src/lib/firebase';
+import { db, auth } from './firebase';
 
 /**
  * Initialize Organization - Web SDK Version
