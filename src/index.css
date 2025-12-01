@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-white text-gray-900 font-sans antialiased;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-epcentra-navy text-white px-4 py-2 rounded-lg hover:bg-epcentra-darkNavy transition-colors;
+  }
+  
+  .btn-secondary {
+    @apply bg-epcentra-teal text-white px-4 py-2 rounded-lg hover:bg-epcentra-lightTeal transition-colors;
+  }
+  
+  .btn-outline {
+    @apply border border-epcentra-navy text-epcentra-navy px-4 py-2 rounded-lg hover:bg-epcentra-navy hover:text-white transition-colors;
+  }
+  
+  .card {
+    @apply bg-white rounded-lg shadow-md p-6 border border-gray-200;
+  }
+  
+  .input {
+    @apply border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-epcentra-teal w-full;
+  }
+  
+  .select {
+    @apply border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-epcentra-teal w-full bg-white;
+  }
+  
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .badge-pending {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+  
+  .badge-in-progress {
+    @apply bg-blue-100 text-blue-800;
+  }
+  
+  .badge-completed {
+    @apply bg-green-100 text-green-800;
+  }
+  
+  .badge-blocked {
+    @apply bg-red-100 text-red-800;
+  }
+}
